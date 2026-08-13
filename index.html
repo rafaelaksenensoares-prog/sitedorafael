@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minha Primeira Galeria - GitHub</title>
-
+    <title>Jogo de Tiro 2D - Mapas</title>
     <style>
-        /* Reset básico para limpar margens do navegador */
         * {
             margin: 0;
             padding: 0;
@@ -15,161 +13,129 @@
         }
 
         body {
-            background-color: #f4f7f6;
-            color: #333;
-        }
-
-        header {
-            text-align: center;
-            padding: 40px 20px;
-            background-color: #ffffff;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        header h1 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-
-        /* --- CONCEITO: Flexbox e Classes --- */
-        .gallery-container {
+            background-color: #1e1e2e;
+            color: #ffffff;
             display: flex;
-            flex-wrap: wrap; /* Faz os cards irem para a linha de baixo se não couberem */
-            justify-content: center; /* Centraliza os cards na tela */
-            gap: 30px; /* Espaçamento moderno entre os elementos flex */
-            padding: 40px 20px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
         }
 
-        /* Estilo do Card Individual */
-        .card {
-            background-color: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            overflow: hidden; /* Garante que a imagem respeite as bordas arredondadas */
-            width: 300px;
-            transition: transform 0.2s;
+        h1 {
+            margin-bottom: 15px;
         }
 
-        .card:hover {
-            transform: translateY(-5px); /* Efeito sutil ao passar o mouse */
+        .menu-mapas {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
         }
 
-        /* --- CONCEITO: Imagens e Espaçamentos --- */
-        .card img {
-            width: 100%; /* A imagem ocupa toda a largura do card */
-            height: 200px;
-            object-fit: cover; /* Não distorce a imagem */
-        }
-
-        .card-content {
-            padding: 20px; /* Espaçamento interno do texto */
-        }
-
-        .card-content h3 {
-            margin-bottom: 10px;
-            color: #2c3e50;
-        }
-
-        .card-content p {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 20px;
-            line-height: 1.4;
-        }
-
-        /* Estilo do Botão de Curtida */
-        .like-btn {
-            background-color: #ff4757;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 20px;
-            cursor: pointer;
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
             font-weight: bold;
-            transition: background 0.2s;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
         }
 
-        .like-btn:hover {
-            background-color: #e84118;
+        button:hover {
+            transform: scale(1.05);
         }
 
-        /* Classe dinâmica que o JS pode adicionar */
-        .like-btn.liked {
-            background-color: #2ed573;
+        .btn-deserto { background-color: #e1b12c; color: #222; }
+        .btn-floresta { background-color: #44bd32; color: #fff; }
+        .btn-cidade { background-color: #718093; color: #fff; }
+
+        canvas {
+            border: 4px solid #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            background-color: #000;
         }
     </style>
 </head>
 <body>
 
-    <header>
-        <h1>📸 Meu Primeiro Feed Interativo</h1>
-        <p>Projeto criado nas aulas de Web Development e hospedado no GitHub!</p>
-    </header>
+    <h1>🎮 Selecione o Mapa</h1>
 
-    <main class="gallery-container">
+    <div class="menu-mapas">
+        <button class="btn-deserto" onclick="carregarMapa('deserto')">🌵 Deserto</button>
+        <button class="btn-floresta" onclick="carregarMapa('floresta')">🌲 Floresta</button>
+        <button class="btn-cidade" onclick="carregarMapa('cidade')">🏢 Cidade</button>
+    </div>
 
-        <div class="card">
-            <img src="https://picsum.photos/id/1015/300/200&quot; alt="Paisagem de Montanha">
-            <div class="card-content">
-                <h3>Aventura nas Montanhas</h3>
-                <p>Um dia incrível explorando a natureza e testando meus códigos.</p>
-                <button class="like-btn">❤️ <span class="like-count">0</span> Curtidas</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <img src="https://picsum.photos/id/1025/300/200&quot; alt="Cachorro fofo">
-            <div class="card-content">
-                <h3>Meu Companheiro de Code</h3>
-                <p>Garante que o código não tenha nenhum bug (ou sim!).</p>
-                <button class="like-btn">❤️ <span class="like-count">0</span> Curtidas</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <img src="https://picsum.photos/id/1043/300/200&quot; alt="Espaço de trabalho">
-            <div class="card-content">
-                <h3>Setup Organizado</h3>
-                <p>Foco total nas aulas de HTML, CSS e JavaScript desta semana.</p>
-                <button class="like-btn">❤️ <span class="like-count">0</span> Curtidas</button>
-            </div>
-        </div>
-
-    </main>
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
 
     <script>
-        // 1. Seleciona TODOS os botões de curtida da página (Eventos em múltiplos elementos)
-        const botoesLike = document.querySelectorAll('.like-btn');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-        // 2. Passa por cada botão usando o forEach
-        botoesLike.forEach(function(botao) {
-           
-            // Adiciona o evento de clique para CADA um dos botões
-            botao.addEventListener('click', function() {
-               
-                // Encontra o elemento <span> de número de curtidas específico DESTE card
-                const spanContador = botao.querySelector('.like-count');
-               
-                // Pega o número atual que está no texto e transforma em número inteiro
-                let curtidasAtuais = parseInt(spanContador.textContent);
-               
-                // --- CONCEITO: Lógica de curtidas ---
-                // Verifica se o usuário já curtiu (checando se a classe 'liked' existe no botão)
-                if (botao.classList.contains('liked')) {
-                    // Se já tinha curtido: remove a classe e diminui 1 do contador
-                    botao.classList.remove('liked');
-                    curtidasAtuais--;
-                } else {
-                    // Se não tinha curtido: adiciona a classe e aumenta 1 no contador
-                    botao.classList.add('liked');
-                    curtidasAtuais++;
-                }
-               
-                // Atualiza o texto do HTML com o novo valor (Contador de likes)
-                spanContador.textContent = curtidasAtuais;
+        // Dados e Estruturas dos 3 Mapas
+        const mapas = {
+            deserto: {
+                corFundo: '#edc9af', // Areia
+                estruturas: [
+                    { x: 150, y: 100, largura: 80, altura: 80, cor: '#c2a268', tipo: 'rocha' },
+                    { x: 550, y: 120, largura: 100, altura: 60, cor: '#c2a268', tipo: 'rocha' },
+                    { x: 350, y: 300, largura: 90, altura: 90, cor: '#d4ac6e', tipo: 'rocha' },
+                    { x: 100, y: 350, largura: 40, altura: 40, cor: '#27ae60', tipo: 'cacto' },
+                    { x: 680, y: 320, largura: 40, altura: 40, cor: '#27ae60', tipo: 'cacto' }
+                ]
+            },
+            floresta: {
+                corFundo: '#2e7d32', // Grama
+                estruturas: [
+                    { x: 100, y: 80, largura: 90, altura: 90, cor: '#1b5e20', tipo: 'arvore' },
+                    { x: 600, y: 90, largura: 100, altura: 100, cor: '#1b5e20', tipo: 'arvore' },
+                    { x: 200, y: 320, largura: 80, altura: 80, cor: '#1b5e20', tipo: 'arvore' },
+                    { x: 500, y: 300, largura: 110, altura: 110, cor: '#1b5e20', tipo: 'arvore' },
+                    { x: 350, y: 0, largura: 60, altura: 500, cor: '#0288d1', tipo: 'rio' } // Rio cortando o mapa
+                ]
+            },
+            cidade: {
+                corFundo: '#546e7a', // Asfalto
+                estruturas: [
+                    { x: 80, y: 60, largura: 180, altura: 120, cor: '#263238', tipo: 'predio' },
+                    { x: 520, y: 60, largura: 200, altura: 120, cor: '#37474f', tipo: 'predio' },
+                    { x: 80, y: 320, largura: 200, altura: 120, cor: '#37474f', tipo: 'predio' },
+                    { x: 520, y: 320, largura: 180, altura: 120, cor: '#263238', tipo: 'predio' },
+                    { x: 370, y: 200, largura: 60, altura: 100, cor: '#d32f2f', tipo: 'container' }
+                ]
+            }
+        };
+
+        let mapaAtual = 'deserto';
+
+        function desenharMapa() {
+            const mapa = mapas[mapaAtual];
+
+            // 1. Limpa o canvas e desenha a cor do solo
+            ctx.fillStyle = mapa.corFundo;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Desenha cada estrutura/construção do mapa
+            mapa.estruturas.forEach(est => {
+                ctx.fillStyle = est.cor;
+                ctx.fillRect(est.x, est.y, est.largura, est.altura);
+
+                // Borda para destacar as construções
+                ctx.strokeStyle = '#00000033';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(est.x, est.y, est.largura, est.altura);
             });
-           
-        });
+        }
+
+        function carregarMapa(nomeMapa) {
+            mapaAtual = nomeMapa;
+            desenharMapa();
+        }
+
+        // Desenha o mapa inicial ao carregar a página
+        desenharMapa();
     </script>
 </body>
 </html>
