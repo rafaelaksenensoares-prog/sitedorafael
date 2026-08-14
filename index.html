@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Jogo 3D - Seleção de Mapas e Arma</title>
+    <title>Jogo 3D - GTA Style</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: #000; }
         
@@ -56,8 +56,9 @@
         #crosshair {
             position: absolute;
             top: 50%; left: 50%;
-            width: 10px; height: 10px;
-            background: rgba(0, 255, 0, 0.8);
+            width: 8px; height: 8px;
+            background: #00ff88;
+            border: 2px solid #000;
             border-radius: 50%;
             transform: translate(-50%, -50%);
             pointer-events: none;
@@ -88,34 +89,32 @@
         <div class="map-grid">
             <div class="map-card floresta" onclick="selectMap('floresta')">
                 <h2>🌲 Floresta</h2>
-                <p>Mapa Grande com Árvores</p>
+                <p>Com Árvores e Rio</p>
             </div>
             <div class="map-card cidade" onclick="selectMap('cidade')">
                 <h2>🏙️ Cidade</h2>
-                <p>Casas com Interior e Telhado</p>
+                <p>Casas Sólidas com Interior</p>
             </div>
             <div class="map-card deserto" onclick="selectMap('deserto')">
                 <h2>🏜️ Deserto</h2>
-                <p>Grandes Pirâmides e Areia</p>
+                <p>Grandes Pirâmides</p>
             </div>
         </div>
     </div>
 
     <div id="hud">
-        <span id="map-name">Mapa</span> | Controles: <b>WASD</b> andar | <b>Mouse</b> olhar | <b>Clique</b> Atirar
+        <span id="map-name">Mapa</span> | <b>WASD</b> andar | <b>Mouse</b> olhar | <b>Clique</b> atirar
     </div>
     <div id="crosshair"></div>
     <button id="btn-voltar" onclick="openMenu()">Sair para o Menu</button>
 
     <script>
-        // CENÁRIO BASE
         let scene, camera, renderer;
-        let obstacles = [];
+        let colliders = []; // Caixas de colisão
         let bullets = [];
         let gunGroup;
         let isGameActive = false;
 
-        // CONTROLES DE MOUSE E TECLADO
         let yaw = 0, pitch = 0;
         const keys = {};
 
@@ -129,18 +128,15 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            // ILUMINAÇÃO
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
 
-            const sunLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
             sunLight.position.set(50, 100, 50);
             scene.add(sunLight);
 
-            // ARMA DO JOGADOR
-            createGun();
+            createImprovedGun();
 
-            // EVENTOS DE CONTROLE
             window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
             window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
@@ -148,7 +144,7 @@
                 if (document.pointerLockElement === document.body) {
                     yaw -= e.movementX * 0.002;
                     pitch -= e.movementY * 0.002;
-                    pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
+                    pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, pitch));
                 }
             });
 
@@ -171,43 +167,56 @@
             animate();
         }
 
-        // CRIAÇÃO DA ARMA 3D
-        function createGun() {
+        // ARMA COM DESIGN MELHORADO
+        function createImprovedGun() {
             gunGroup = new THREE.Group();
 
-            const bodyGeo = new THREE.BoxGeometry(0.1, 0.15, 0.6);
-            const darkMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-            const gunBody = new THREE.Mesh(bodyGeo, darkMat);
-            gunBody.position.set(0.25, -0.2, -0.4);
-            gunGroup.add(gunBody);
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3 });
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8 });
 
-            const barrelGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.4);
-            const gunBarrel = new THREE.Mesh(barrelGeo, darkMat);
-            gunBarrel.rotation.x = Math.PI / 2;
-            gunBarrel.position.set(0.25, -0.17, -0.7);
-            gunGroup.add(gunBarrel);
+            // Corpo Principal
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.5), darkMat);
+            body.position.set(0.2, -0.2, -0.4);
+            gunGroup.add(body);
+
+            // Cano
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5), metalMat);
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.set(0.2, -0.16, -0.65);
+            gunGroup.add(barrel);
+
+            // Pente / Carregador
+            const mag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.08), darkMat);
+            mag.position.set(0.2, -0.28, -0.38);
+            mag.rotation.x = -0.2;
+            gunGroup.add(mag);
 
             camera.add(gunGroup);
             scene.add(camera);
         }
 
-        // SISTEMA DE TIRO
+        // SISTEMA DE TIRO MELHORADO
         function shoot() {
-            const bulletGeo = new THREE.SphereGeometry(0.08);
-            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            const bulletGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.4);
+            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
             const bullet = new THREE.Mesh(bulletGeo, bulletMat);
 
             const dir = new THREE.Vector3();
             camera.getWorldDirection(dir);
 
-            bullet.position.copy(camera.position).add(dir.clone().multiplyScalar(0.5));
-            bullet.userData = { velocity: dir.multiplyScalar(1.5), life: 100 };
+            bullet.position.copy(camera.position).add(dir.clone().multiplyScalar(0.6));
+            bullet.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+
+            bullet.userData = { 
+                velocity: dir.multiplyScalar(2.5), 
+                life: 120 
+            };
 
             scene.add(bullet);
             bullets.push(bullet);
         }
 
-        // SELEÇÃO DE MAPAS
+        // CONTROLE DE SELEÇÃO DE MAPAS
         function selectMap(mapType) {
             clearScene();
             isGameActive = true;
@@ -237,7 +246,7 @@
         }
 
         function clearScene() {
-            obstacles = [];
+            colliders = [];
             for (let i = scene.children.length - 1; i >= 0; i--) {
                 const obj = scene.children[i];
                 if (obj !== camera && obj.type !== "AmbientLight" && obj.type !== "DirectionalLight") {
@@ -246,42 +255,57 @@
             }
         }
 
-        // --- CONSTRUÇÃO DOS MAPAS ---
+        function registerCollider(mesh) {
+            mesh.updateMatrixWorld();
+            const box = new THREE.Box3().setFromObject(mesh);
+            colliders.push(box);
+        }
 
-        // MAPA 1: FLORESTA
+        // MAPA 1: FLORESTA COM RIO
         function buildFloresta() {
             document.getElementById('map-name').innerText = "Mapa: Floresta 🌲";
-            
+
             const floorGeo = new THREE.PlaneGeometry(250, 250);
             const floorMat = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
 
-            for (let i = 0; i < 60; i++) {
-                let x = (Math.random() - 0.5) * 200;
-                let z = (Math.random() - 0.5) * 200;
-                if (Math.hypot(x, z) > 5) createTree(x, z);
+            // Rio Cruzando a Floresta
+            const riverGeo = new THREE.PlaneGeometry(20, 250);
+            const riverMat = new THREE.MeshLambertMaterial({ color: 0x1e90ff });
+            const river = new THREE.Mesh(riverGeo, riverMat);
+            river.rotation.x = -Math.PI / 2;
+            river.position.set(30, 0.05, 0);
+            scene.add(river);
+
+            // Árvores
+            for (let i = 0; i < 70; i++) {
+                let x = (Math.random() - 0.5) * 220;
+                let z = (Math.random() - 0.5) * 220;
+                // Não colocar árvore dentro do rio
+                if (Math.abs(x - 30) > 12 && Math.hypot(x, z) > 6) {
+                    createTree(x, z);
+                }
             }
         }
 
         function createTree(x, z) {
-            const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 3);
+            const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 4);
             const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
             const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-            trunk.position.set(x, 1.5, z);
+            trunk.position.set(x, 2, z);
             scene.add(trunk);
+            registerCollider(trunk);
 
-            const leavesGeo = new THREE.ConeGeometry(2, 5, 8);
+            const leavesGeo = new THREE.ConeGeometry(2.5, 6, 8);
             const leavesMat = new THREE.MeshLambertMaterial({ color: 0x006400 });
             const leaves = new THREE.Mesh(leavesGeo, leavesMat);
-            leaves.position.set(x, 5.5, z);
+            leaves.position.set(x, 6, z);
             scene.add(leaves);
-
-            obstacles.push({ x: x, z: z, radius: 1.0 });
         }
 
-        // MAPA 2: CIDADE COM CASAS E TELHADOS
+        // MAPA 2: CIDADE COM COLISÃO COMPLETA DE CASA
         function buildCidade() {
             document.getElementById('map-name').innerText = "Mapa: Cidade 🏙️";
 
@@ -291,43 +315,39 @@
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
 
-            // Criar várias casas com interior acessível
-            createHouseWithInterior(-15, -15);
-            createHouseWithInterior(20, -20);
-            createHouseWithInterior(-20, 25);
+            createSolidHouse(-15, -15);
+            createSolidHouse(25, -20);
+            createSolidHouse(-20, 30);
         }
 
-        function createHouseWithInterior(x, z) {
+        function createSolidHouse(x, z) {
             const wallMat = new THREE.MeshLambertMaterial({ color: 0xb22222 });
             const roofMat = new THREE.MeshLambertMaterial({ color: 0x501010 });
 
-            // Paredes (Esquerda, Direita, Fundo)
-            createWall(x - 5, 2, z, 0.3, 4, 10, wallMat); 
-            createWall(x + 5, 2, z, 0.3, 4, 10, wallMat); 
-            createWall(x, 2, z - 5, 10, 4, 0.3, wallMat); 
+            // Parede Esquerda
+            buildWallSection(x - 5, 2, z, 0.4, 4, 10, wallMat);
+            // Parede Direita
+            buildWallSection(x + 5, 2, z, 0.4, 4, 10, wallMat);
+            // Parede Fundo
+            buildWallSection(x, 2, z - 5, 10, 4, 0.4, wallMat);
 
-            // Frente com Entrada (Porta)
-            createWall(x - 3, 2, z + 5, 4, 4, 0.3, wallMat); 
-            createWall(x + 3, 2, z + 5, 4, 4, 0.3, wallMat); 
+            // Parede Frente com espaço de Porta
+            buildWallSection(x - 3.2, 2, z + 5, 3.6, 4, 0.4, wallMat);
+            buildWallSection(x + 3.2, 2, z + 5, 3.6, 4, 0.4, wallMat);
 
             // Telhado
-            const roofGeo = new THREE.ConeGeometry(8, 3, 4);
+            const roofGeo = new THREE.ConeGeometry(8.5, 3.5, 4);
             const roof = new THREE.Mesh(roofGeo, roofMat);
-            roof.position.set(x, 5.5, z);
+            roof.position.set(x, 5.75, z);
             roof.rotation.y = Math.PI / 4;
             scene.add(roof);
-
-            // Obstáculos das Paredes
-            obstacles.push({ x: x - 5, z: z, radius: 1.5 });
-            obstacles.push({ x: x + 5, z: z, radius: 1.5 });
-            obstacles.push({ x: x, z: z - 5, radius: 1.5 });
         }
 
-        function createWall(x, y, z, w, h, d, mat) {
-            const geo = new THREE.BoxGeometry(w, h, d);
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(x, y, z);
-            scene.add(mesh);
+        function buildWallSection(x, y, z, w, h, d, mat) {
+            const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+            wall.position.set(x, y, z);
+            scene.add(wall);
+            registerCollider(wall);
         }
 
         // MAPA 3: DESERTO
@@ -340,9 +360,9 @@
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
 
-            createPyramid(-30, -30, 20);
-            createPyramid(40, -20, 15);
-            createPyramid(0, 50, 25);
+            createPyramid(-35, -35, 22);
+            createPyramid(40, -20, 16);
+            createPyramid(0, 50, 28);
         }
 
         function createPyramid(x, z, size) {
@@ -352,21 +372,18 @@
             pyramid.position.set(x, (size * 1.2) / 2, z);
             pyramid.rotation.y = Math.PI / 4;
             scene.add(pyramid);
-
-            obstacles.push({ x: x, z: z, radius: size * 0.7 });
+            registerCollider(pyramid);
         }
 
-        // LOOP DE ATUALIZAÇÃO
+        // ATUALIZAÇÃO DE JOGO E FÍSICA
         function updatePlayer() {
             if (!isGameActive) return;
 
-            // Rotação da Câmera
             camera.rotation.order = "YXZ";
             camera.rotation.y = yaw;
             camera.rotation.x = pitch;
 
-            // Movimento WASD
-            const moveSpeed = 0.2;
+            const moveSpeed = 0.18;
             let dx = 0, dz = 0;
 
             if (keys['w']) {
@@ -386,30 +403,61 @@
                 dz -= Math.sin(yaw) * moveSpeed;
             }
 
-            // Colisão
-            let nextX = camera.position.x + dx;
-            let nextZ = camera.position.z + dz;
-            let canMove = true;
+            // Testar Colisão com Paredes usando Box3 (Bounding Box)
+            const playerRadius = 0.4;
+            
+            // Movimento em X
+            let nextPosX = camera.position.x + dx;
+            let playerBoxX = new THREE.Box3(
+                new THREE.Vector3(nextPosX - playerRadius, 0.2, camera.position.z - playerRadius),
+                new THREE.Vector3(nextPosX + playerRadius, 1.8, camera.position.z + playerRadius)
+            );
 
-            for (let obs of obstacles) {
-                if (Math.hypot(nextX - obs.x, nextZ - obs.z) < obs.radius) {
-                    canMove = false;
+            let collideX = false;
+            for (let box of colliders) {
+                if (playerBoxX.intersectsBox(box)) {
+                    collideX = true;
                     break;
                 }
             }
+            if (!collideX) camera.position.x = nextPosX;
 
-            if (canMove) {
-                camera.position.x = nextX;
-                camera.position.z = nextZ;
+            // Movimento em Z
+            let nextPosZ = camera.position.z + dz;
+            let playerBoxZ = new THREE.Box3(
+                new THREE.Vector3(camera.position.x - playerRadius, 0.2, nextPosZ - playerRadius),
+                new THREE.Vector3(camera.position.x + playerRadius, 1.8, nextPosZ + playerRadius)
+            );
+
+            let collideZ = false;
+            for (let box of colliders) {
+                if (playerBoxZ.intersectsBox(box)) {
+                    collideZ = true;
+                    break;
+                }
             }
+            if (!collideZ) camera.position.z = nextPosZ;
 
-            // Atualizar Tiros
+            // ATUALIZAR E DESTRUIR TIROS AO BATER NO CHÃO OU OBSTÁCULOS
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
                 b.position.add(b.userData.velocity);
                 b.userData.life--;
 
-                if (b.userData.life <= 0) {
+                // Verifica colisão com o Chão (Y <= 0)
+                let hitFloor = b.position.y <= 0;
+
+                // Verifica colisão com Obstáculos
+                let hitObstacle = false;
+                const bulletPoint = b.position;
+                for (let box of colliders) {
+                    if (box.containsPoint(bulletPoint)) {
+                        hitObstacle = true;
+                        break;
+                    }
+                }
+
+                if (hitFloor || hitObstacle || b.userData.life <= 0) {
                     scene.remove(b);
                     bullets.splice(i, 1);
                 }
