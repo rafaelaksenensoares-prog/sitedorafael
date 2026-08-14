@@ -2,107 +2,348 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>GTA 3D Primeira Pessoa</title>
+    <title>Jogo 3D - Seleção de Mapas e Arma</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: #000; }
+        
+        /* MENU DE SELEÇÃO DE MAPAS */
+        #menu {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 15, 25, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        #menu h1 { color: #fff; font-size: 36px; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; }
+
+        .map-grid { display: flex; gap: 20px; }
+
+        .map-card {
+            background: #222;
+            border: 3px solid #444;
+            border-radius: 12px;
+            padding: 20px;
+            width: 200px;
+            text-align: center;
+            color: white;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .map-card:hover { transform: scale(1.05); border-color: #00ff88; box-shadow: 0 0 15px rgba(0, 255, 136, 0.4); }
+        .map-card.floresta { background: linear-gradient(135deg, #1b4332, #2d6a4f); }
+        .map-card.cidade { background: linear-gradient(135deg, #2b2d42, #4a4e69); }
+        .map-card.deserto { background: linear-gradient(135deg, #7f5539, #b08968); }
+
+        /* HUD DO JOGO */
         #hud {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 15px; left: 15px;
             color: white;
             background: rgba(0, 0, 0, 0.6);
-            padding: 10px 15px;
+            padding: 12px 20px;
             border-radius: 8px;
             font-size: 16px;
             pointer-events: none;
+            display: none;
+            z-index: 5;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 10px; height: 10px;
+            background: rgba(0, 255, 0, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            display: none;
+            z-index: 5;
+        }
+
+        #btn-voltar {
+            position: absolute;
+            top: 15px; right: 15px;
+            padding: 10px 15px;
+            background: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            display: none;
+            z-index: 5;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-    <div id="hud">
-        <b>GTA 3D Primeira Pessoa</b><br>
-        Controles: <b>W, A, S, D</b> para andar | <b>Setas</b> para girar a câmera<br>
-        <span id="location">Mapa: Floresta</span>
+    <div id="menu">
+        <h1>Escolha o Mapa para Jogar</h1>
+        <div class="map-grid">
+            <div class="map-card floresta" onclick="selectMap('floresta')">
+                <h2>🌲 Floresta</h2>
+                <p>Mapa Grande com Árvores</p>
+            </div>
+            <div class="map-card cidade" onclick="selectMap('cidade')">
+                <h2>🏙️ Cidade</h2>
+                <p>Casas com Interior e Telhado</p>
+            </div>
+            <div class="map-card deserto" onclick="selectMap('deserto')">
+                <h2>🏜️ Deserto</h2>
+                <p>Grandes Pirâmides e Areia</p>
+            </div>
+        </div>
     </div>
 
+    <div id="hud">
+        <span id="map-name">Mapa</span> | Controles: <b>WASD</b> andar | <b>Mouse</b> olhar | <b>Clique</b> Atirar
+    </div>
+    <div id="crosshair"></div>
+    <button id="btn-voltar" onclick="openMenu()">Sair para o Menu</button>
+
     <script>
-        // 1. Configuração da Cena e Câmera (Primeira Pessoa)
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87ceeb); // Céu Azul
+        // CENÁRIO BASE
+        let scene, camera, renderer;
+        let obstacles = [];
+        let bullets = [];
+        let gunGroup;
+        let isGameActive = false;
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.6, 0); // Altura dos olhos (1.6m)
+        // CONTROLES DE MOUSE E TECLADO
+        let yaw = 0, pitch = 0;
+        const keys = {};
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
 
-        // ILUMINAÇÃO
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        scene.add(ambientLight);
-        const sunLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        sunLight.position.set(10, 20, 10);
-        scene.add(sunLight);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-        // 2. CRIAÇÃO DOS MAPAS (Chão e Decorações)
-        const obstacles = [];
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
 
-        // --- ZONA 1: FLORESTA (Grama Verde com Árvores) ---
-        const forestFloorGeo = new THREE.PlaneGeometry(60, 60);
-        const forestFloorMat = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
-        const forestFloor = new THREE.Mesh(forestFloorGeo, forestFloorMat);
-        forestFloor.rotation.x = -Math.PI / 2;
-        forestFloor.position.set(-60, 0, 0);
-        scene.add(forestFloor);
+            // ILUMINAÇÃO
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
 
-        function createTree(x, z) {
-            const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 2);
-            const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
-            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-            trunk.position.set(x, 1, z);
-            scene.add(trunk);
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            sunLight.position.set(50, 100, 50);
+            scene.add(sunLight);
 
-            const leavesGeo = new THREE.ConeGeometry(1.5, 3, 8);
-            const leavesMat = new THREE.MeshLambertMaterial({ color: 0x006400 });
-            const leaves = new THREE.Mesh(leavesGeo, leavesMat);
-            leaves.position.set(x, 3.5, z);
-            scene.add(leaves);
+            // ARMA DO JOGADOR
+            createGun();
 
-            obstacles.push({ x: x, z: z, radius: 0.8 });
+            // EVENTOS DE CONTROLE
+            window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+            window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+
+            document.addEventListener('mousemove', (e) => {
+                if (document.pointerLockElement === document.body) {
+                    yaw -= e.movementX * 0.002;
+                    pitch -= e.movementY * 0.002;
+                    pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
+                }
+            });
+
+            document.addEventListener('mousedown', (e) => {
+                if (!isGameActive) return;
+
+                if (document.pointerLockElement !== document.body) {
+                    document.body.requestPointerLock();
+                } else if (e.button === 0) {
+                    shoot();
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            animate();
         }
 
-        // Criar Várias Árvores na Floresta
-        createTree(-70, -10);
-        createTree(-50, -15);
-        createTree(-65, 10);
-        createTree(-55, 18);
-        createTree(-75, 5);
+        // CRIAÇÃO DA ARMA 3D
+        function createGun() {
+            gunGroup = new THREE.Group();
 
-        // --- ZONA 2: CIDADE (Asfalto com Casa) ---
-        const cityFloorGeo = new THREE.PlaneGeometry(60, 60);
-        const cityFloorMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
-        const cityFloor = new THREE.Mesh(cityFloorGeo, cityFloorMat);
-        cityFloor.rotation.x = -Math.PI / 2;
-        cityFloor.position.set(0, 0, 0);
-        scene.add(cityFloor);
+            const bodyGeo = new THREE.BoxGeometry(0.1, 0.15, 0.6);
+            const darkMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+            const gunBody = new THREE.Mesh(bodyGeo, darkMat);
+            gunBody.position.set(0.25, -0.2, -0.4);
+            gunGroup.add(gunBody);
 
-        // Casa
-        const houseGeo = new THREE.BoxGeometry(8, 5, 8);
-        const houseMat = new THREE.MeshLambertMaterial({ color: 0xb22222 });
-        const house = new THREE.Mesh(houseGeo, houseMat);
-        house.position.set(0, 2.5, -10);
-        scene.add(house);
-        obstacles.push({ x: 0, z: -10, radius: 5 });
+            const barrelGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.4);
+            const gunBarrel = new THREE.Mesh(barrelGeo, darkMat);
+            gunBarrel.rotation.x = Math.PI / 2;
+            gunBarrel.position.set(0.25, -0.17, -0.7);
+            gunGroup.add(gunBarrel);
 
-        // --- ZONA 3: DESERTO (Areia com Pirâmides) ---
-        const desertFloorGeo = new THREE.PlaneGeometry(60, 60);
-        const desertFloorMat = new THREE.MeshLambertMaterial({ color: 0xe6c280 });
-        const desertFloor = new THREE.Mesh(desertFloorGeo, desertFloorMat);
-        desertFloor.rotation.x = -Math.PI / 2;
-        desertFloor.position.set(60, 0, 0);
-        scene.add(desertFloor);
+            camera.add(gunGroup);
+            scene.add(camera);
+        }
+
+        // SISTEMA DE TIRO
+        function shoot() {
+            const bulletGeo = new THREE.SphereGeometry(0.08);
+            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+
+            bullet.position.copy(camera.position).add(dir.clone().multiplyScalar(0.5));
+            bullet.userData = { velocity: dir.multiplyScalar(1.5), life: 100 };
+
+            scene.add(bullet);
+            bullets.push(bullet);
+        }
+
+        // SELEÇÃO DE MAPAS
+        function selectMap(mapType) {
+            clearScene();
+            isGameActive = true;
+
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+            document.getElementById('crosshair').style.display = 'block';
+            document.getElementById('btn-voltar').style.display = 'block';
+
+            camera.position.set(0, 1.7, 0);
+            yaw = 0; pitch = 0;
+
+            if (mapType === 'floresta') buildFloresta();
+            else if (mapType === 'cidade') buildCidade();
+            else if (mapType === 'deserto') buildDeserto();
+
+            document.body.requestPointerLock();
+        }
+
+        function openMenu() {
+            isGameActive = false;
+            document.exitPointerLock();
+            document.getElementById('menu').style.display = 'flex';
+            document.getElementById('hud').style.display = 'none';
+            document.getElementById('crosshair').style.display = 'none';
+            document.getElementById('btn-voltar').style.display = 'none';
+        }
+
+        function clearScene() {
+            obstacles = [];
+            for (let i = scene.children.length - 1; i >= 0; i--) {
+                const obj = scene.children[i];
+                if (obj !== camera && obj.type !== "AmbientLight" && obj.type !== "DirectionalLight") {
+                    scene.remove(obj);
+                }
+            }
+        }
+
+        // --- CONSTRUÇÃO DOS MAPAS ---
+
+        // MAPA 1: FLORESTA
+        function buildFloresta() {
+            document.getElementById('map-name').innerText = "Mapa: Floresta 🌲";
+            
+            const floorGeo = new THREE.PlaneGeometry(250, 250);
+            const floorMat = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            for (let i = 0; i < 60; i++) {
+                let x = (Math.random() - 0.5) * 200;
+                let z = (Math.random() - 0.5) * 200;
+                if (Math.hypot(x, z) > 5) createTree(x, z);
+            }
+        }
+
+        function createTree(x, z) {
+            const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 3);
+            const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.set(x, 1.5, z);
+            scene.add(trunk);
+
+            const leavesGeo = new THREE.ConeGeometry(2, 5, 8);
+            const leavesMat = new THREE.MeshLambertMaterial({ color: 0x006400 });
+            const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+            leaves.position.set(x, 5.5, z);
+            scene.add(leaves);
+
+            obstacles.push({ x: x, z: z, radius: 1.0 });
+        }
+
+        // MAPA 2: CIDADE COM CASAS E TELHADOS
+        function buildCidade() {
+            document.getElementById('map-name').innerText = "Mapa: Cidade 🏙️";
+
+            const floorGeo = new THREE.PlaneGeometry(250, 250);
+            const floorMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            // Criar várias casas com interior acessível
+            createHouseWithInterior(-15, -15);
+            createHouseWithInterior(20, -20);
+            createHouseWithInterior(-20, 25);
+        }
+
+        function createHouseWithInterior(x, z) {
+            const wallMat = new THREE.MeshLambertMaterial({ color: 0xb22222 });
+            const roofMat = new THREE.MeshLambertMaterial({ color: 0x501010 });
+
+            // Paredes (Esquerda, Direita, Fundo)
+            createWall(x - 5, 2, z, 0.3, 4, 10, wallMat); 
+            createWall(x + 5, 2, z, 0.3, 4, 10, wallMat); 
+            createWall(x, 2, z - 5, 10, 4, 0.3, wallMat); 
+
+            // Frente com Entrada (Porta)
+            createWall(x - 3, 2, z + 5, 4, 4, 0.3, wallMat); 
+            createWall(x + 3, 2, z + 5, 4, 4, 0.3, wallMat); 
+
+            // Telhado
+            const roofGeo = new THREE.ConeGeometry(8, 3, 4);
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.set(x, 5.5, z);
+            roof.rotation.y = Math.PI / 4;
+            scene.add(roof);
+
+            // Obstáculos das Paredes
+            obstacles.push({ x: x - 5, z: z, radius: 1.5 });
+            obstacles.push({ x: x + 5, z: z, radius: 1.5 });
+            obstacles.push({ x: x, z: z - 5, radius: 1.5 });
+        }
+
+        function createWall(x, y, z, w, h, d, mat) {
+            const geo = new THREE.BoxGeometry(w, h, d);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y, z);
+            scene.add(mesh);
+        }
+
+        // MAPA 3: DESERTO
+        function buildDeserto() {
+            document.getElementById('map-name').innerText = "Mapa: Deserto 🏜️";
+
+            const floorGeo = new THREE.PlaneGeometry(250, 250);
+            const floorMat = new THREE.MeshLambertMaterial({ color: 0xe6c280 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            createPyramid(-30, -30, 20);
+            createPyramid(40, -20, 15);
+            createPyramid(0, 50, 25);
+        }
 
         function createPyramid(x, z, size) {
             const pyrGeo = new THREE.ConeGeometry(size, size * 1.2, 4);
@@ -112,29 +353,21 @@
             pyramid.rotation.y = Math.PI / 4;
             scene.add(pyramid);
 
-            obstacles.push({ x: x, z: z, radius: size * 0.8 });
+            obstacles.push({ x: x, z: z, radius: size * 0.7 });
         }
 
-        createPyramid(60, -10, 8);
-        createPyramid(75, 10, 5);
-
-        // 3. MOVIMENTAÇÃO E COLISÃO
-        const keys = {};
-        let yaw = 0; // Rotação da câmera
-
-        window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
-        window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
-
+        // LOOP DE ATUALIZAÇÃO
         function updatePlayer() {
-            // Girar Visão (Câmera)
-            if (keys['arrowleft']) yaw += 0.03;
-            if (keys['arrowright']) yaw -= 0.03;
-            camera.rotation.y = yaw;
+            if (!isGameActive) return;
 
-            // Calcular Direção
-            let moveSpeed = 0.15;
-            let dx = 0;
-            let dz = 0;
+            // Rotação da Câmera
+            camera.rotation.order = "YXZ";
+            camera.rotation.y = yaw;
+            camera.rotation.x = pitch;
+
+            // Movimento WASD
+            const moveSpeed = 0.2;
+            let dx = 0, dz = 0;
 
             if (keys['w']) {
                 dx -= Math.sin(yaw) * moveSpeed;
@@ -153,14 +386,13 @@
                 dz -= Math.sin(yaw) * moveSpeed;
             }
 
-            // Teste de Colisão antes de mover
+            // Colisão
             let nextX = camera.position.x + dx;
             let nextZ = camera.position.z + dz;
             let canMove = true;
 
             for (let obs of obstacles) {
-                let dist = Math.hypot(nextX - obs.x, nextZ - obs.z);
-                if (dist < obs.radius) {
+                if (Math.hypot(nextX - obs.x, nextZ - obs.z) < obs.radius) {
                     canMove = false;
                     break;
                 }
@@ -171,28 +403,26 @@
                 camera.position.z = nextZ;
             }
 
-            // Atualizar HUD de Localização
-            const locText = document.getElementById('location');
-            if (camera.position.x < -30) locText.innerText = "Mapa: Floresta 🌲";
-            else if (camera.position.x > 30) locText.innerText = "Mapa: Deserto 🏜️";
-            else locText.innerText = "Mapa: Cidade 🏙️";
+            // Atualizar Tiros
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.position.add(b.userData.velocity);
+                b.userData.life--;
+
+                if (b.userData.life <= 0) {
+                    scene.remove(b);
+                    bullets.splice(i, 1);
+                }
+            }
         }
 
-        // Adjust Canvas no redimensionamento
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Loop de Renderização
         function animate() {
             requestAnimationFrame(animate);
             updatePlayer();
             renderer.render(scene, camera);
         }
 
-        animate();
+        window.onload = init;
     </script>
 </body>
 </html>
