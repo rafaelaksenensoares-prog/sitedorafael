@@ -1,35 +1,44 @@
-using System.Collections.Generic;
 using UnityEngine;
 
-public class GeradorDeMoveis : MonoBehaviour
+public class Arma : MonoBehaviour
 {
-    [System.Serializable]
-    public struct PontoDeSpawn
-    {
-        public Transform localizacao;
-        public List<GameObject> opcoesDeMoveis; // Móveis válidos para este local
-    }
+    [Header("Configurações do Disparo")]
+    public Transform pontoDeDisparo; // Ponto de onde a bala/raio sai
+    public float alcance = 100f;
+    public float dano = 25f;
+    public float cadenciaDeTiro = 0.15f;
 
-    [Header("Locais de Spawn dentro da Casa")]
-    public List<PontoDeSpawn> pontosDaCasa;
+    [Header("Efeitos")]
+    public ParticleSystem efeitoMuzzle;
+    public GameObject impactoPrefab;
 
-    void Start()
-    {
-        DecorarCasa();
-    }
+    private float proximoTiro = 0f;
 
-    public void DecorarCasa()
+    void Update()
     {
-        foreach (PontoDeSpawn ponto in pontosDaCasa)
+        // Dispara quando pressiona o botão esquerdo do mouse
+        if (Input.GetButton("Fire1") && Time.time >= proximoTiro)
         {
-            if (ponto.opcoesDeMoveis.Count > 0 && ponto.localizacao != null)
-            {
-                // Escolhe um móvel aleatório da lista para aquele ponto
-                int indiceAleatorio = Random.Range(0, ponto.opcoesDeMoveis.Count);
-                GameObject movelecolhido = ponto.opcoesDeMoveis[indiceAleatorio];
+            proximoTiro = Time.time + cadenciaDeTiro;
+            Atirar();
+        }
+    }
 
-                // Instancia o móvel na posição e rotação do ponto
-                Instantiate(movelecolhido, ponto.localizacao.position, ponto.localizacao.rotation, ponto.localizacao);
+    void Atirar()
+    {
+        if (efeitoMuzzle != null)
+            efeitoMuzzle.Play();
+
+        RaycastHit hit;
+        // Não há consumo de munição aqui, permitindo disparos infinitos
+        if (Physics.Raycast(pontoDeDisparo.position, pontoDeDisparo.forward, out hit, alcance))
+        {
+            Debug.Log("Atingiu: " + hit.transform.name);
+
+            // Instancia efeito de impacto no ponto atingido
+            if (impactoPrefab != null)
+            {
+                Instantiate(impactoPrefab, hit.point, Quaternion.LookRotation(hit.normal));
             }
         }
     }
