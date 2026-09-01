@@ -1,145 +1,90 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.AI;
-
-// 1. SISTEMA DE VIDA DO JOGADOR
-public class VidaJogador : MonoBehaviour
-{
-    [Header("Configurações de Vida")]
-    public float vidaMaxima = 100f;
-    public float vidaAtual;
-    public Slider barraDeVidaUI;
-
-    void Start()
-    {
-        vidaAtual = vidaMaxima;
-        if (barraDeVidaUI != null)
-        {
-            barraDeVidaUI.maxValue = vidaMaxima;
-            barraDeVidaUI.value = vidaAtual;
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Meu FPS em HTML (A-Frame)</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <style>
+        /* Estilo da Interface UI (Barra de Vida) */
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        #interface {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 999;
+            color: white;
+            text-shadow: 2px 2px 0 #000;
         }
-    }
+        #barra-vida-fundo {
+            width: 300px;
+            height: 30px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border: 3px solid black;
+        }
+        #barra-vida-atual {
+            width: 100%;
+            height: 100%;
+            background-color: #00ff00; /* Vida cheia = Verde */
+            transition: width 0.2s;
+        }
+        .mira {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 999;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
 
-    public void ReceberDano(float quantidade)
-    {
-        vidaAtual -= quantidade;
-        if (barraDeVidaUI != null) barraDeVidaUI.value = vidaAtual;
+    <div id="interface">
+        <h2>VIDA</h2>
+        <div id="barra-vida-fundo">
+            <div id="barra-vida-atual"></div>
+        </div>
+    </div>
+    <div class="mira"></div>
+
+    <a-scene>
         
-        if (vidaAtual <= 0) Debug.Log("Você foi derrotado!");
-    }
-}
+        <a-entity id="jogador" position="0 1.6 0">
+            <a-camera look-controls wasd-controls="acceleration: 100">
+                <a-box position="0.3 -0.3 -0.6" scale="0.1 0.1 0.5" color="#333"></a-box>
+            </a-camera>
+        </a-entity>
 
-// 2. SISTEMA DA ARMA (BALAS INFINITAS)
-public class ArmaProjetil : MonoBehaviour
-{
-    [Header("Configurações da Arma")]
-    public GameObject prefabBalaVerde;
-    public Transform pontoDeDisparo;
-    public float cadenciaDeTiro = 0.15f;
-    private float proximoTiro = 0f;
+        <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#222"></a-plane>
 
-    void Update()
-    {
-        if (Input.GetButton("Fire1") && Time.time >= proximoTiro)
-        {
-            proximoTiro = Time.time + cadenciaDeTiro;
-            if (prefabBalaVerde != null && pontoDeDisparo != null)
-            {
-                Instantiate(prefabBalaVerde, pontoDeDisparo.position, pontoDeDisparo.rotation);
-            }
-        }
-    }
-}
+        <a-box position="10 5 -15" width="8" height="15" depth="8" color="#555"></a-box>
+        <a-box position="-15 5 -20" width="10" height="20" depth="10" color="#444"></a-box>
 
-// 3. PROJÉTIL (BALA VERDE)
-public class BalaVerde : MonoBehaviour
-{
-    public float velocidade = 40f;
-    public float dano = 25f;
+        <a-entity position="0 0 -10">
+            <a-box position="0 2.5 0" width="10" height="5" depth="10" color="#8B4513" material="opacity: 0.3; transparent: true"></a-box>
+            
+            <a-box position="-3 0.5 -3" width="2" height="1" depth="1" color="blue"></a-box> <a-cylinder position="0 0.5 0" radius="1" height="1" color="#cd853f"></a-cylinder> <a-box position="3 1 3" width="1" height="2" depth="1" color="#a0522d"></a-box> </a-entity>
 
-    void Start()
-    {
-        Destroy(gameObject, 3f); // Destrói após 3 segundos
-    }
+        <a-box id="inimigo" position="0 1 -25" width="1.5" height="2" depth="1.5" color="red"></a-box>
 
-    void Update()
-    {
-        transform.Translate(Vector3.forward * velocidade * Time.deltaTime);
-    }
+    </a-scene>
 
-    void OnTriggerEnter(Collider other)
-    {
-        BotInimigo bot = other.GetComponent<BotInimigo>();
-        if (bot != null) bot.ReceberDano(dano);
+    <script>
+        // Variáveis Globais
+        let vidaJogador = 100;
+        let vidaInimigo = 3; // O inimigo morre com 3 tiros
+        
+        const jogadorElement = document.querySelector('#jogador');
+        const inimigoElement = document.querySelector('#inimigo');
+        const cena = document.querySelector('a-scene');
+        const barraVidaAtual = document.querySelector('#barra-vida-atual');
 
-        if (!other.CompareTag("Player")) Destroy(gameObject);
-    }
-}
-
-// 4. INTELIGÊNCIA DO BOT (INIMIGO)
-public class BotInimigo : MonoBehaviour
-{
-    [Header("Configurações do Bot")]
-    public float vida = 50f;
-    public float danoDoAtaque = 10f;
-    public float intervaloAtaque = 1.0f;
-    public float alcanceAtaque = 2.0f;
-
-    private Transform jogador;
-    private NavMeshAgent agente;
-    private float proximoAtaque = 0f;
-
-    void Start()
-    {
-        agente = GetComponent<NavMeshAgent>();
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null) jogador = playerObj.transform;
-    }
-
-    void Update()
-    {
-        if (jogador == null) return;
-
-        agente.SetDestination(jogador.position);
-
-        if (Vector3.Distance(transform.position, jogador.position) <= alcanceAtaque && Time.time >= proximoAtaque)
-        {
-            proximoAtaque = Time.time + intervaloAtaque;
-            VidaJogador vidaPlayer = jogador.GetComponent<VidaJogador>();
-            if (vidaPlayer != null) vidaPlayer.ReceberDano(danoDoAtaque);
-        }
-    }
-
-    public void ReceberDano(float quantidade)
-    {
-        vida -= quantidade;
-        if (vida <= 0) Destroy(gameObject);
-    }
-}
-
-// 5. GERADOR DE MÓVEIS NAS CASAS
-public class GeradorDeMoveis : MonoBehaviour
-{
-    [System.Serializable]
-    public struct PontoDeSpawn
-    {
-        public Transform localizacao;
-        public List<GameObject> opcoesDeMoveis;
-    }
-
-    public List<PontoDeSpawn> pontosDaCasa;
-
-    void Start()
-    {
-        foreach (PontoDeSpawn ponto in pontosDaCasa)
-        {
-            if (ponto.opcoesDeMoveis.Count > 0 && ponto.localizacao != null)
-            {
-                int indiceAleatorio = Random.Range(0, ponto.opcoesDeMoveis.Count);
-                GameObject movel = ponto.opcoesDeMoveis[indiceAleatorio];
-                Instantiate(movel, ponto.localizacao.position, ponto.localizacao.rotation, ponto.localizacao);
-            }
-        }
-    }
-}
+        // 1. SISTEMA DE TIROS (Bala Verde e Grande)
+        window.addEventListener('mousedown', () => {
+            // Cria a bala
+            const bala = document.createElement('a-sphere');
+            bala.setAttribute('color', 'lime
