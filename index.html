@@ -1,6 +1,9 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.AI;
 
+// 1. SISTEMA DE VIDA DO JOGADOR
 public class VidaJogador : MonoBehaviour
 {
     [Header("Configurações de Vida")]
@@ -21,20 +24,122 @@ public class VidaJogador : MonoBehaviour
     public void ReceberDano(float quantidade)
     {
         vidaAtual -= quantidade;
-        if (barraDeVidaUI != null)
-        {
-            barraDeVidaUI.value = vidaAtual;
-        }
+        if (barraDeVidaUI != null) barraDeVidaUI.value = vidaAtual;
+        
+        if (vidaAtual <= 0) Debug.Log("Você foi derrotado!");
+    }
+}
 
-        if (vidaAtual <= 0)
+// 2. SISTEMA DA ARMA (BALAS INFINITAS)
+public class ArmaProjetil : MonoBehaviour
+{
+    [Header("Configurações da Arma")]
+    public GameObject prefabBalaVerde;
+    public Transform pontoDeDisparo;
+    public float cadenciaDeTiro = 0.15f;
+    private float proximoTiro = 0f;
+
+    void Update()
+    {
+        if (Input.GetButton("Fire1") && Time.time >= proximoTiro)
         {
-            Derrota();
+            proximoTiro = Time.time + cadenciaDeTiro;
+            if (prefabBalaVerde != null && pontoDeDisparo != null)
+            {
+                Instantiate(prefabBalaVerde, pontoDeDisparo.position, pontoDeDisparo.rotation);
+            }
+        }
+    }
+}
+
+// 3. PROJÉTIL (BALA VERDE)
+public class BalaVerde : MonoBehaviour
+{
+    public float velocidade = 40f;
+    public float dano = 25f;
+
+    void Start()
+    {
+        Destroy(gameObject, 3f); // Destrói após 3 segundos
+    }
+
+    void Update()
+    {
+        transform.Translate(Vector3.forward * velocidade * Time.deltaTime);
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        BotInimigo bot = other.GetComponent<BotInimigo>();
+        if (bot != null) bot.ReceberDano(dano);
+
+        if (!other.CompareTag("Player")) Destroy(gameObject);
+    }
+}
+
+// 4. INTELIGÊNCIA DO BOT (INIMIGO)
+public class BotInimigo : MonoBehaviour
+{
+    [Header("Configurações do Bot")]
+    public float vida = 50f;
+    public float danoDoAtaque = 10f;
+    public float intervaloAtaque = 1.0f;
+    public float alcanceAtaque = 2.0f;
+
+    private Transform jogador;
+    private NavMeshAgent agente;
+    private float proximoAtaque = 0f;
+
+    void Start()
+    {
+        agente = GetComponent<NavMeshAgent>();
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+        if (playerObj != null) jogador = playerObj.transform;
+    }
+
+    void Update()
+    {
+        if (jogador == null) return;
+
+        agente.SetDestination(jogador.position);
+
+        if (Vector3.Distance(transform.position, jogador.position) <= alcanceAtaque && Time.time >= proximoAtaque)
+        {
+            proximoAtaque = Time.time + intervaloAtaque;
+            VidaJogador vidaPlayer = jogador.GetComponent<VidaJogador>();
+            if (vidaPlayer != null) vidaPlayer.ReceberDano(danoDoAtaque);
         }
     }
 
-    void Derrota()
+    public void ReceberDano(float quantidade)
     {
-        Debug.Log("Você foi derrotado!");
-        // Adicione aqui a lógica de reinício ou game over
+        vida -= quantidade;
+        if (vida <= 0) Destroy(gameObject);
+    }
+}
+
+// 5. GERADOR DE MÓVEIS NAS CASAS
+public class GeradorDeMoveis : MonoBehaviour
+{
+    [System.Serializable]
+    public struct PontoDeSpawn
+    {
+        public Transform localizacao;
+        public List<GameObject> opcoesDeMoveis;
+    }
+
+    public List<PontoDeSpawn> pontosDaCasa;
+
+    void Start()
+    {
+        foreach (PontoDeSpawn ponto in pontosDaCasa)
+        {
+            if (ponto.opcoesDeMoveis.Count > 0 && ponto.localizacao != null)
+            {
+                int indiceAleatorio = Random.Range(0, ponto.opcoesDeMoveis.Count);
+                GameObject movel = ponto.opcoesDeMoveis[indiceAleatorio];
+                Instantiate(movel, ponto.localizacao.position, ponto.localizacao.rotation, ponto.localizacao);
+            }
+        }
     }
 }
