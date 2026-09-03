@@ -1,90 +1,160 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <title>Meu FPS em HTML (A-Frame)</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <style>
-        /* Estilo da Interface UI (Barra de Vida) */
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        #interface {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 999;
-            color: white;
-            text-shadow: 2px 2px 0 #000;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+// --- DEFINIÇÃO DAS CLASSES DE PEIXES ---
+public enum DificuldadePeixe { Facil, Medio, Dificil, Lendario }
+
+[System.Serializable]
+public class Peixe
+{
+    public string nome;
+    public DificuldadePeixe dificuldade;
+    public float valorVenda;
+    public float forcaResistencia; // O quão difícil é puxar este peixe
+}
+
+// --- SISTEMA PRINCIPAL DO JOGO ---
+public class SimuladorDePesca : MonoBehaviour
+{
+    [Header("Configurações do Jogador e Isca")]
+    public Transform pontoDeLancamento; // Ponto na câmera onde a isca sai
+    public GameObject iscaPrefab;
+    public float forcaLancamento = 15f;
+    public float velocidadeRecolhimento = 5f;
+
+    [Header("Economia e Upgrades")]
+    public float dinheiro = 0f;
+    public int nivelVara = 1; // Facilita puxar peixes difíceis
+    public int nivelBarco = 1;
+
+    [Header("Banco de Dados de Peixes")]
+    public List<Peixe> tiposDePeixes;
+
+    // Variáveis de Controle de Estado
+    private GameObject iscaAtual;
+    private bool iscaNaAgua = false;
+    private Peixe peixeFisgado = null;
+    private bool pescando = false;
+
+    void Update()
+    {
+        // 1. JOGAR A ISCA (Mouse - Botão Esquerdo)
+        if (Input.GetMouseButtonDown(0) && iscaAtual == null)
+        {
+            LancarIsca();
         }
-        #barra-vida-fundo {
-            width: 300px;
-            height: 30px;
-            background-color: rgba(0, 0, 0, 0.5);
-            border: 3px solid black;
+
+        // 2. PUXAR A ISCA / PEIXE (Barra de Espaço)
+        if (Input.GetKey(KeyCode.Space) && iscaAtual != null)
+        {
+            RecolherIsca();
         }
-        #barra-vida-atual {
-            width: 100%;
-            height: 100%;
-            background-color: #00ff00; /* Vida cheia = Verde */
-            transition: width 0.2s;
+
+        // 3. VENDER PEIXE (Exemplo de Loja ao apertar V)
+        if (Input.GetKeyDown(KeyCode.V))
+        {
+            ComprarUpgradeVara();
         }
-        .mira {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 10px;
-            height: 10px;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 999;
-            pointer-events: none;
+    }
+
+    void LancarIsca()
+    {
+        pescando = true;
+        iscaNaAgua = false;
+        peixeFisgado = null;
+
+        // Cria a isca e joga ela para frente
+        iscaAtual = Instantiate(iscaPrefab, pontoDeLancamento.position, pontoDeLancamento.rotation);
+        Rigidbody rb = iscaAtual.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.AddForce(pontoDeLancamento.forward * forcaLancamento, ForceMode.Impulse);
         }
-    </style>
-</head>
-<body>
 
-    <div id="interface">
-        <h2>VIDA</h2>
-        <div id="barra-vida-fundo">
-            <div id="barra-vida-atual"></div>
-        </div>
-    </div>
-    <div class="mira"></div>
+        // Inicia a rotina para esperar a isca cair na água e fisgar o peixe
+        StartCoroutine(EsperarPeixeMorder());
+    }
 
-    <a-scene>
-        
-        <a-entity id="jogador" position="0 1.6 0">
-            <a-camera look-controls wasd-controls="acceleration: 100">
-                <a-box position="0.3 -0.3 -0.6" scale="0.1 0.1 0.5" color="#333"></a-box>
-            </a-camera>
-        </a-entity>
+    void RecolherIsca()
+    {
+        // Calcula a velocidade que a isca volta pro jogador
+        float velocidadeFinal = velocidadeRecolhimento;
 
-        <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#222"></a-plane>
+        // Se tem um peixe, a resistência dele diminui a velocidade, mas o nível da vara ajuda
+        if (peixeFisgado != null)
+        {
+            float dificuldadeAtual = peixeFisgado.forcaResistencia - (nivelVara * 2);
+            if (dificuldadeAtual < 1) dificuldadeAtual = 1; // Garante que nunca fique impossível
+            velocidadeFinal /= dificuldadeAtual;
+        }
 
-        <a-box position="10 5 -15" width="8" height="15" depth="8" color="#555"></a-box>
-        <a-box position="-15 5 -20" width="10" height="20" depth="10" color="#444"></a-box>
+        // Move a isca de volta para o jogador
+        iscaAtual.transform.position = Vector3.MoveTowards(
+            iscaAtual.transform.position, 
+            pontoDeLancamento.position, 
+            velocidadeFinal * Time.deltaTime
+        );
 
-        <a-entity position="0 0 -10">
-            <a-box position="0 2.5 0" width="10" height="5" depth="10" color="#8B4513" material="opacity: 0.3; transparent: true"></a-box>
+        // Se a isca chegou de volta ao jogador
+        if (Vector3.Distance(iscaAtual.transform.position, pontoDeLancamento.position) < 1.5f)
+        {
+            if (peixeFisgado != null)
+            {
+                Debug.Log($"Você pegou um {peixeFisgado.nome}! Ganhou R$ {peixeFisgado.valorVenda}");
+                dinheiro += peixeFisgado.valorVenda;
+            }
+            else
+            {
+                Debug.Log("Você recolheu a isca vazia.");
+            }
+
+            Destroy(iscaAtual);
+            iscaAtual = null;
+            pescando = false;
+        }
+    }
+
+    IEnumerator EsperarPeixeMorder()
+    {
+        // Espera 2 segundos para simular a isca caindo e estabilizando na água
+        yield return new WaitForSeconds(2f);
+        iscaNaAgua = true;
+        Debug.Log("A isca está na água... aguardando peixe.");
+
+        // Espera um tempo aleatório entre 3 a 8 segundos para o peixe morder
+        float tempoEspera = Random.Range(3f, 8f);
+        yield return new WaitForSeconds(tempoEspera);
+
+        // Se o jogador não puxou a isca antes do tempo
+        if (iscaAtual != null && iscaNaAgua)
+        {
+            // Sorteia um peixe da lista baseado no nível do barco (barco melhor = peixes melhores)
+            int indexAleatorio = Random.Range(0, Mathf.Min(tiposDePeixes.Count, nivelBarco * 2));
+            peixeFisgado = tiposDePeixes[indexAleatorio];
+
+            Debug.Log($"FISGOU! Um {peixeFisgado.nome} mordeu a isca! Segure ESPAÇO para puxar!");
             
-            <a-box position="-3 0.5 -3" width="2" height="1" depth="1" color="blue"></a-box> <a-cylinder position="0 0.5 0" radius="1" height="1" color="#cd853f"></a-cylinder> <a-box position="3 1 3" width="1" height="2" depth="1" color="#a0522d"></a-box> </a-entity>
+            // Efeito visual na isca (faz a isca afundar um pouco)
+            Rigidbody rb = iscaAtual.GetComponent<Rigidbody>();
+            if(rb != null) rb.AddForce(Vector3.down * 5f, ForceMode.Impulse);
+        }
+    }
 
-        <a-box id="inimigo" position="0 1 -25" width="1.5" height="2" depth="1.5" color="red"></a-box>
-
-    </a-scene>
-
-    <script>
-        // Variáveis Globais
-        let vidaJogador = 100;
-        let vidaInimigo = 3; // O inimigo morre com 3 tiros
+    // --- SISTEMA DE UPGRADES ---
+    void ComprarUpgradeVara()
+    {
+        float custoUpgrade = nivelVara * 100f; // Ex: Nível 1 custa 100, Nível 2 custa 200...
         
-        const jogadorElement = document.querySelector('#jogador');
-        const inimigoElement = document.querySelector('#inimigo');
-        const cena = document.querySelector('a-scene');
-        const barraVidaAtual = document.querySelector('#barra-vida-atual');
-
-        // 1. SISTEMA DE TIROS (Bala Verde e Grande)
-        window.addEventListener('mousedown', () => {
-            // Cria a bala
-            const bala = document.createElement('a-sphere');
-            bala.setAttribute('color', 'lime
+        if (dinheiro >= custoUpgrade)
+        {
+            dinheiro -= custoUpgrade;
+            nivelVara++;
+            Debug.Log($"Vara aprimorada para o Nível {nivelVara}! Nova força de puxada.");
+        }
+        else
+        {
+            Debug.Log($"Dinheiro insuficiente. Custa R$ {custoUpgrade}. Você tem R$ {dinheiro}.");
+        }
+    }
+}
