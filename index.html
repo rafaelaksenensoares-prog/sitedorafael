@@ -1,160 +1,453 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
-// --- DEFINIÇÃO DAS CLASSES DE PEIXES ---
-public enum DificuldadePeixe { Facil, Medio, Dificil, Lendario }
-
-[System.Serializable]
-public class Peixe
-{
-    public string nome;
-    public DificuldadePeixe dificuldade;
-    public float valorVenda;
-    public float forcaResistencia; // O quão difícil é puxar este peixe
-}
-
-// --- SISTEMA PRINCIPAL DO JOGO ---
-public class SimuladorDePesca : MonoBehaviour
-{
-    [Header("Configurações do Jogador e Isca")]
-    public Transform pontoDeLancamento; // Ponto na câmera onde a isca sai
-    public GameObject iscaPrefab;
-    public float forcaLancamento = 15f;
-    public float velocidadeRecolhimento = 5f;
-
-    [Header("Economia e Upgrades")]
-    public float dinheiro = 0f;
-    public int nivelVara = 1; // Facilita puxar peixes difíceis
-    public int nivelBarco = 1;
-
-    [Header("Banco de Dados de Peixes")]
-    public List<Peixe> tiposDePeixes;
-
-    // Variáveis de Controle de Estado
-    private GameObject iscaAtual;
-    private bool iscaNaAgua = false;
-    private Peixe peixeFisgado = null;
-    private bool pescando = false;
-
-    void Update()
-    {
-        // 1. JOGAR A ISCA (Mouse - Botão Esquerdo)
-        if (Input.GetMouseButtonDown(0) && iscaAtual == null)
-        {
-            LancarIsca();
-        }
-
-        // 2. PUXAR A ISCA / PEIXE (Barra de Espaço)
-        if (Input.GetKey(KeyCode.Space) && iscaAtual != null)
-        {
-            RecolherIsca();
-        }
-
-        // 3. VENDER PEIXE (Exemplo de Loja ao apertar V)
-        if (Input.GetKeyDown(KeyCode.V))
-        {
-            ComprarUpgradeVara();
-        }
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador de Pesca - 1ª Pessoa</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
     }
 
-    void LancarIsca()
-    {
-        pescando = true;
-        iscaNaAgua = false;
-        peixeFisgado = null;
-
-        // Cria a isca e joga ela para frente
-        iscaAtual = Instantiate(iscaPrefab, pontoDeLancamento.position, pontoDeLancamento.rotation);
-        Rigidbody rb = iscaAtual.GetComponent<Rigidbody>();
-        if (rb != null)
-        {
-            rb.AddForce(pontoDeLancamento.forward * forcaLancamento, ForceMode.Impulse);
-        }
-
-        // Inicia a rotina para esperar a isca cair na água e fisgar o peixe
-        StartCoroutine(EsperarPeixeMorder());
+    body {
+      background-color: #1a1a1a;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
     }
 
-    void RecolherIsca()
-    {
-        // Calcula a velocidade que a isca volta pro jogador
-        float velocidadeFinal = velocidadeRecolhimento;
-
-        // Se tem um peixe, a resistência dele diminui a velocidade, mas o nível da vara ajuda
-        if (peixeFisgado != null)
-        {
-            float dificuldadeAtual = peixeFisgado.forcaResistencia - (nivelVara * 2);
-            if (dificuldadeAtual < 1) dificuldadeAtual = 1; // Garante que nunca fique impossível
-            velocidadeFinal /= dificuldadeAtual;
-        }
-
-        // Move a isca de volta para o jogador
-        iscaAtual.transform.position = Vector3.MoveTowards(
-            iscaAtual.transform.position, 
-            pontoDeLancamento.position, 
-            velocidadeFinal * Time.deltaTime
-        );
-
-        // Se a isca chegou de volta ao jogador
-        if (Vector3.Distance(iscaAtual.transform.position, pontoDeLancamento.position) < 1.5f)
-        {
-            if (peixeFisgado != null)
-            {
-                Debug.Log($"Você pegou um {peixeFisgado.nome}! Ganhou R$ {peixeFisgado.valorVenda}");
-                dinheiro += peixeFisgado.valorVenda;
-            }
-            else
-            {
-                Debug.Log("Você recolheu a isca vazia.");
-            }
-
-            Destroy(iscaAtual);
-            iscaAtual = null;
-            pescando = false;
-        }
+    #game-container {
+      position: relative;
+      width: 800px;
+      height: 500px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      border-radius: 8px;
+      overflow: hidden;
     }
 
-    IEnumerator EsperarPeixeMorder()
-    {
-        // Espera 2 segundos para simular a isca caindo e estabilizando na água
-        yield return new WaitForSeconds(2f);
-        iscaNaAgua = true;
-        Debug.Log("A isca está na água... aguardando peixe.");
-
-        // Espera um tempo aleatório entre 3 a 8 segundos para o peixe morder
-        float tempoEspera = Random.Range(3f, 8f);
-        yield return new WaitForSeconds(tempoEspera);
-
-        // Se o jogador não puxou a isca antes do tempo
-        if (iscaAtual != null && iscaNaAgua)
-        {
-            // Sorteia um peixe da lista baseado no nível do barco (barco melhor = peixes melhores)
-            int indexAleatorio = Random.Range(0, Mathf.Min(tiposDePeixes.Count, nivelBarco * 2));
-            peixeFisgado = tiposDePeixes[indexAleatorio];
-
-            Debug.Log($"FISGOU! Um {peixeFisgado.nome} mordeu a isca! Segure ESPAÇO para puxar!");
-            
-            // Efeito visual na isca (faz a isca afundar um pouco)
-            Rigidbody rb = iscaAtual.GetComponent<Rigidbody>();
-            if(rb != null) rb.AddForce(Vector3.down * 5f, ForceMode.Impulse);
-        }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      cursor: crosshair;
     }
 
-    // --- SISTEMA DE UPGRADES ---
-    void ComprarUpgradeVara()
-    {
-        float custoUpgrade = nivelVara * 100f; // Ex: Nível 1 custa 100, Nível 2 custa 200...
+    /* Interface do Jogo (UI) */
+    .ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 15px;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 20px;
+      border-radius: 8px;
+      backdrop-filter: blur(4px);
+    }
+
+    .stat-box {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .stat-value {
+      color: #2ecc71;
+    }
+
+    .status-msg {
+      position: absolute;
+      top: 20%;
+      width: 100%;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+      color: #f1c40f;
+    }
+
+    .shop-panel {
+      pointer-events: auto;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 15px;
+      border-radius: 8px;
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+
+    button {
+      background: #e67e22;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      font-size: 14px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #d35400;
+    }
+
+    button:disabled {
+      background: #7f8c8d;
+      cursor: not-allowed;
+    }
+
+    /* Barra de Progresso do Peixe */
+    .progress-container {
+      position: absolute;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      height: 20px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: #2ecc71;
+      transition: width 0.1s linear;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+    
+    <div class="ui-overlay">
+      <div class="top-bar">
+        <div class="stat-box">Dinheiro: R$ <span id="money-display" class="stat-value">0</span></div>
+        <div class="stat-box">Vara Nvl: <span id="rod-level" class="stat-value">1</span></div>
+        <div class="stat-box">Barco Nvl: <span id="boat-level" class="stat-value">1</span></div>
+      </div>
+
+      <div id="status-message" class="status-msg">Clique com o MOUSE no oceano para lançar a isca!</div>
+
+      <div id="progress-container" class="progress-container">
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+
+      <div class="shop-panel">
+        <button id="buy-rod-btn" onclick="upgradeRod()">Aprimorar Vara (R$ 100)</button>
+        <button id="buy-boat-btn" onclick="upgradeBoat()">Aprimorar Barco (R$ 300)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Estado da Economia
+    let money = 0;
+    let rodLevel = 1;
+    let boatLevel = 1;
+
+    // Configuração dos Peixes (Classes de Dificuldade)
+    const fishDatabase = [
+      { name: "Sardinha", minBoat: 1, value: 15, resistance: 1.5, color: "#95a5a6" },
+      { name: "Robalo", minBoat: 1, value: 45, resistance: 3.0, color: "#3498db" },
+      { name: "Atum", minBoat: 2, value: 120, resistance: 5.5, color: "#e74c3c" },
+      { name: "Peixe-Espada", minBoat: 2, value: 300, resistance: 8.0, color: "#9b59b6" },
+      { name: "Tubarão", minBoat: 3, value: 750, resistance: 12.0, color: "#34495e" },
+      { name: "Megalodonte", minBoat: 3, value: 2000, resistance: 18.0, color: "#f1c40f" }
+    ];
+
+    // Estados do Jogo: 'READY', 'CASTING', 'WAITING', 'HOOKED', 'REELING'
+    let gameState = 'READY';
+    let currentFish = null;
+    let reelProgress = 0;
+    let isReeling = false;
+
+    // Posições da Isca e Animação
+    let lure = { x: 400, y: 400, targetY: 400, inWater: false };
+    let waveOffset = 0;
+
+    // Elementos da UI
+    const moneyDisplay = document.getElementById('money-display');
+    const rodLevelDisplay = document.getElementById('rod-level');
+    const boatLevelDisplay = document.getElementById('boat-level');
+    const statusMsg = document.getElementById('status-message');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const buyRodBtn = document.getElementById('buy-rod-btn');
+    const buyBoatBtn = document.getElementById('buy-boat-btn');
+
+    // Controles de Teclado e Mouse
+    canvas.addEventListener('click', (e) => {
+      if (gameState === 'READY') {
+        const rect = canvas.getBoundingClientRect();
+        const clickY = e.clientY - rect.top;
         
-        if (dinheiro >= custoUpgrade)
-        {
-            dinheiro -= custoUpgrade;
-            nivelVara++;
-            Debug.Log($"Vara aprimorada para o Nível {nivelVara}! Nova força de puxada.");
+        // Só permite jogar a isca na área da água (abaixo da linha do horizonte)
+        if (clickY > 200) {
+          lure.targetY = clickY;
+          castLure();
         }
-        else
-        {
-            Debug.Log($"Dinheiro insuficiente. Custa R$ {custoUpgrade}. Você tem R$ {dinheiro}.");
-        }
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && (gameState === 'HOOKED' || gameState === 'REELING')) {
+        isReeling = true;
+        gameState = 'REELING';
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') {
+        isReeling = false;
+      }
+    });
+
+    function castLure() {
+      gameState = 'CASTING';
+      lure.x = 400;
+      lure.y = 450; // Começa perto da vara
+      statusMsg.innerText = "Lançando a isca...";
     }
-}
+
+    function startWaiting() {
+      gameState = 'WAITING';
+      statusMsg.innerText = "Aguardando um peixe morder...";
+      
+      // Sorteia um tempo de espera entre 2.5 e 6 segundos
+      const waitTime = Math.random() * 3500 + 2500;
+      setTimeout(() => {
+        if (gameState === 'WAITING') {
+          hookFish();
+        }
+      }, waitTime);
+    }
+
+    function hookFish() {
+      // Filtra os peixes disponíveis com base no nível do barco
+      const availableFish = fishDatabase.filter(f => f.minBoat <= boatLevel);
+      currentFish = availableFish[Math.floor(Math.random() * availableFish.length)];
+      
+      gameState = 'HOOKED';
+      reelProgress = 20; // Começa com 20% de progresso
+      progressContainer.style.display = 'block';
+      statusMsg.innerText = `FISGOU! Um ${currentFish.name}! SEGURE ESPAÇO PARA PUXAR!`;
+    }
+
+    function updateGame() {
+      waveOffset += 0.05;
+
+      // Movimento da Isca na Lançada
+      if (gameState === 'CASTING') {
+        lure.y += (lure.targetY - lure.y) * 0.1;
+        if (Math.abs(lure.y - lure.targetY) < 5) {
+          lure.y = lure.targetY;
+          startWaiting();
+        }
+      }
+
+      // Lógica de Puxar o Peixe (Pressionando Espaço)
+      if (gameState === 'HOOKED' || gameState === 'REELING') {
+        const rodPower = rodLevel * 1.8;
+        const resistance = currentFish.resistance;
+
+        if (isReeling) {
+          // Puxa o peixe
+          reelProgress += (rodPower / resistance) * 0.4;
+          // Traze a isca visualmente para perto do barco
+          lure.y += (450 - lure.y) * 0.01;
+        } else {
+          // O peixe escapa gradualmente se não segurar o espaço
+          reelProgress -= resistance * 0.15;
+        }
+
+        // Limita a barra entre 0 e 100%
+        reelProgress = Math.max(0, Math.min(100, reelProgress));
+        progressBar.style.width = `${reelProgress}%`;
+
+        // Condição de Vitória (Capturou)
+        if (reelProgress >= 100) {
+          catchFish();
+        } 
+        // Condição de Derrota (Escapou)
+        else if (reelProgress <= 0 && gameState === 'REELING') {
+          fishEscaped();
+        }
+      }
+    }
+
+    function catchFish() {
+      money += currentFish.value;
+      statusMsg.innerText = `Você pegou um ${currentFish.name} e vendeu por R$ ${currentFish.value}!`;
+      resetFishing();
+    }
+
+    function fishEscaped() {
+      statusMsg.innerText = `O peixe escapou! Tente aprimorar sua vara.`;
+      resetFishing();
+    }
+
+    function resetFishing() {
+      gameState = 'READY';
+      isReeling = false;
+      progressContainer.style.display = 'none';
+      lure.y = 450;
+      updateUI();
+    }
+
+    // --- LOJA E UPGRADES ---
+    function upgradeRod() {
+      const cost = rodLevel * 100;
+      if (money >= cost) {
+        money -= cost;
+        rodLevel++;
+        updateUI();
+        statusMsg.innerText = `Vara aprimorada para o Nível ${rodLevel}!`;
+      }
+    }
+
+    function upgradeBoat() {
+      const cost = boatLevel * 300;
+      if (money >= cost) {
+        money -= cost;
+        boatLevel++;
+        updateUI();
+        statusMsg.innerText = `Barco aprimorado! Agora você pode encontrar peixes mais raros!`;
+      }
+    }
+
+    function updateUI() {
+      moneyDisplay.innerText = money;
+      rodLevelDisplay.innerText = rodLevel;
+      boatLevelDisplay.innerText = boatLevel;
+
+      buyRodBtn.innerText = `Aprimorar Vara (R$ ${rodLevel * 100})`;
+      buyBoatBtn.innerText = `Aprimorar Barco (R$ ${boatLevel * 300})`;
+
+      buyRodBtn.disabled = money < (rodLevel * 100);
+      buyBoatBtn.disabled = money < (boatLevel * 300);
+    }
+
+    // --- RENDERIZAÇÃO GRÁFICA (Canvas 2D em 1ª Pessoa) ---
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Céu
+      let skyGradient = ctx.createLinearGradient(0, 0, 0, 200);
+      skyGradient.addColorStop(0, '#1a3c40');
+      skyGradient.addColorStop(1, '#f39c12');
+      ctx.fillStyle = skyGradient;
+      ctx.fillRect(0, 0, canvas.width, 200);
+
+      // Sol no horizonte
+      ctx.fillStyle = '#f1c40f';
+      ctx.beginPath();
+      ctx.arc(400, 200, 35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Oceano com ondas
+      let oceanGradient = ctx.createLinearGradient(0, 200, 0, 500);
+      oceanGradient.addColorStop(0, '#16a085');
+      oceanGradient.addColorStop(1, '#0f3057');
+      ctx.fillStyle = oceanGradient;
+      ctx.fillRect(0, 200, canvas.width, 300);
+
+      // Desenhar efeito de ondas
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 2;
+      for (let i = 220; i < 500; i += 30) {
+        ctx.beginPath();
+        for (let x = 0; x < canvas.width; x += 20) {
+          let y = i + Math.sin(x * 0.02 + waveOffset + i) * 3;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      // 3. Isca e Linha de Pesca
+      if (gameState !== 'READY') {
+        // Linha
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(550, 420); // Ponta da Vara
+        ctx.lineTo(lure.x, lure.y);
+        ctx.stroke();
+
+        // Isca
+        ctx.fillStyle = (gameState === 'HOOKED' || gameState === 'REELING') ? currentFish.color : '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(lure.x, lure.y + Math.sin(waveOffset * 2) * 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Efeito visual de água espirrando quando o peixe morde
+        if (gameState === 'HOOKED' || gameState === 'REELING') {
+          ctx.strokeStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(lure.x, lure.y, (waveOffset * 10) % 20, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      // 4. Barco (Vista de Primeira Pessoa - Borda e Vara)
+      // Madeira do Barco
+      ctx.fillStyle = '#5c3d2e';
+      ctx.beginPath();
+      ctx.moveTo(0, 500);
+      ctx.lineTo(0, 440);
+      ctx.lineTo(800, 440);
+      ctx.lineTo(800, 500);
+      ctx.fill();
+
+      // Detalhe da borda
+      ctx.fillStyle = '#3d2314';
+      ctx.fillRect(0, 435, 800, 10);
+
+      // Vara de Pesca
+      ctx.strokeStyle = '#d35400';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(700, 500); // Cabo da vara
+      ctx.lineTo(550, 420); // Ponta da vara
+      ctx.stroke();
+
+      requestAnimationFrame(() => {
+        updateGame();
+        draw();
+      });
+    }
+
+    // Inicialização
+    updateUI();
+    draw();
+  </script>
+</body>
+</html>
